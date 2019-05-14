@@ -16,6 +16,11 @@ public class Splitter implements Runnable
 	@Override
 	public void run() 
 	{
+		if(this.source==null)
+		{
+			this.result=null;
+			return;
+		}
 		int index=0;
 		while(index<source.length())
 		{
@@ -31,6 +36,9 @@ public class Splitter implements Runnable
 	
 	public String getResult()
 	{
-		return this.result.toString();
+		if(this.result==null)
+			return null;
+		else
+			return this.result.toString();
 	}
 }

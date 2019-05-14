@@ -1,82 +1,89 @@
 package main;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
 import java.io.PrintWriter;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.Scanner;
 import core.Dictionary;
-import core.Splitter;
+import core.MultiThreadSplitter;
 
 public class Main 
 {
-	public static void main(String[] args) throws ClassNotFoundException, IOException 
+	/*
+	 * 单线程处理行数
+	 */
+	final static int line=500;
+
+	public static void main(String[] args) throws ClassNotFoundException, IOException, InterruptedException 
 	{
-		BufferedReader in = null;
-		PrintWriter out = null;
-		ObjectInputStream obj = null;
-		Dictionary dictionary=null;
-		try
+		Scanner s=new Scanner(System.in);
+		
+		ObjectInputStream obj = IO.getObjectInputStream();
+		if(obj==null)
 		{
-			obj=new ObjectInputStream(new BufferedInputStream(new FileInputStream("./dictionary.ruben")));
-			dictionary=(Dictionary)obj.readObject();
-		}
-		catch(Exception e)
-		{
-			System.out.println("找不到词典文件或文件已损坏。确保dictionary.ruben文件在执行文件根目录下。");
-			System.out.println("The dictionary file could not be found or the file is corrupt. Make sure that the 'dictionary.ruben' file is in the root directory of the execution file.");
+			s.close();
 			return;
 		}
-		Scanner s=new Scanner(System.in);
+		Dictionary dictionary=(Dictionary)obj.readObject();
+		
 		System.out.println("输入待分词语料文件的绝对路径（文件应为UTF-8编码）：");
 		String source=s.next();
+		BufferedReader in = IO.getReader(source);
+		if(in==null)
+		{
+			obj.close();
+			s.close();
+			return;
+		}
+		in.read();
+		
 		System.out.println("输入分词结果文件的输出路径：");
 		String destination=s.next();
-		try
+		PrintWriter out = IO.getWriter(destination);
+		if(out==null)
 		{
-			in=new BufferedReader(new InputStreamReader(new FileInputStream(source), "UTF-8"));
-		}
-		catch(Exception e)
-		{
-			System.out.println("读取待分词语料时发生错误，确认文件路径是否正确。");
-			System.out.println("An error occurred while reading the word stock to be divided. Make sure the file path is correct.");
 			obj.close();
-			s.close();
-			return;
-		}
-		SimpleDateFormat df=new SimpleDateFormat();
-		Date date=new Date();
-		df.applyPattern("yy-MM-dd-HH-mm-ss");
-		try
-		{
-			out=new PrintWriter(new File(destination+"\\"+df.format(date)+".txt"));
-		}
-		catch(Exception e)
-		{
-			System.out.println("分词结果文件的输出路径有误或不存在。");
-			System.out.println("The output path of the participle result file is incorrect or does not exist.");
 			in.close();
-			obj.close();
 			s.close();
 			return;
 		}
+		
 		long time1=System.currentTimeMillis();
-		in.read();
-		String input=in.readLine();
-		while(input!=null)
+		Thread[] th=Function.initialize();
+		String[][] arr=new String[th.length][line];
+		MultiThreadSplitter[] splitter=new MultiThreadSplitter[th.length];
+		for(int a=0;a<arr.length;a++)
 		{
-			Splitter splitter=new Splitter(input, dictionary);
-			splitter.run();
-			out.write(splitter.getResult()+"\r\n");
-			input=in.readLine();
+			Function.read(arr[a], in);
+		}
+		
+		while(arr[0][0]!=null)
+		{
+			for(int a=0;a<th.length;a++)
+			{
+				splitter[a]=new MultiThreadSplitter(arr[a], dictionary);
+				th[a]=new Thread(splitter[a]);
+			}
+			for(int a=0;a<th.length;a++)
+			{
+				th[a].start();
+			}
+			for(int a=0;a<th.length;a++)
+			{
+				th[a].join();
+				//if(a==0)
+					//time3=System.currentTimeMillis();
+				Function.write(splitter[a].getResult(), out);
+			}
+			arr=new String[th.length][line];
+			for(int a=0;a<arr.length;a++)
+			{
+				Function.read(arr[a], in);
+			}
 		}
 		long time2=System.currentTimeMillis();
+		
 		System.out.println("运行时间："+(time2-time1)+"ms");
 		in.close();
 		out.close();
